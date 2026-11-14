@@ -26,7 +26,7 @@ apps-script/
 
 ### 1. Colocar a porta no script da planilha
 1. Abra a planilha **GASTOS JOSÉ/MANU** → **Extensões → Apps Script**.
-2. Se existirem os arquivos `App` (script) e `App` (HTML) de uma conversa anterior, **apague os dois**. Eles têm um `doGet` que conflita com o da porta nova.
+2. Se na lista de arquivos existirem `App` (script) e `App` (HTML), **apague os dois** (⋮ ao lado do nome → Excluir). Eles têm um `doGet`, e o projeto só pode ter um.
 3. Clique em `+` → **Script** → nome **`Api`** → cole o conteúdo de [`apps-script/Api.gs`](apps-script/Api.gs).
 4. Abra o **`Menu.gs`** e, logo antes de `.addToUi()`, cole estas linhas:
    ```javascript
