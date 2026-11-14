@@ -50,7 +50,7 @@ apps-script/
 > **Quando vier uma versão nova do `Api.gs`:** cole o código e vá em **Implantar → Gerenciar implantações → ✏️ editar → Versão: Nova versão → Implantar**. A URL continua a mesma. Se usar "Nova implantação", a URL muda e o app perde a conexão.
 
 ### 3. App no ar (GitHub Pages)
-No GitHub: **Settings → Pages → Branch: `main` / pasta `/ (root)` → Save**. Em 1 ou 2 minutos o app fica em `https://portugalmanu.github.io/FINANCAS/`.
+No GitHub: **Settings → Pages → Branch: `master` / pasta `/ (root)` → Save**. Em 1 ou 2 minutos o app fica em `https://portugalmanu.github.io/FINANCAS/`.
 
 ### 4. Criar a chave e instalar no celular
 1. Recarregue a planilha (F5) → **📊 Financeiro → 📱 App do celular → Criar chave de acesso**.
