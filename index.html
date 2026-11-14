@@ -1,90 +1,82 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Finanças</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta name="description" content="Gastos da Manu e do José: o que falta pagar no mês.">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="topbar">
-    <h1>💰 Finanças</h1>
-    <div class="month-nav">
-      <button id="prevMonth" aria-label="Mês anterior">‹</button>
-      <span id="monthLabel"></span>
-      <button id="nextMonth" aria-label="Próximo mês">›</button>
+  <!-- Primeiro acesso -->
+  <section id="setup" class="setup" hidden>
+    <div class="setup-card">
+      <img src="icons/icon-192.png" alt="" class="setup-logo" width="72" height="72">
+      <h1>Finanças</h1>
+      <p class="muted">Abra no celular o link gerado na planilha (menu <b>📊 Financeiro → 📱 App do celular → Criar chave de acesso</b>). O app já entra configurado.</p>
+      <details>
+        <summary>Prefiro digitar</summary>
+        <form id="formSetup" class="form">
+          <label>Endereço da API
+            <input name="api" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec" required>
+          </label>
+          <label>Chave de acesso
+            <input name="chave" autocomplete="off" required minlength="20">
+          </label>
+          <button class="btn primario" type="submit">Entrar</button>
+        </form>
+      </details>
+      <p id="setupMsg" class="msg-erro" hidden></p>
     </div>
-    <button id="themeToggle" class="ghost" aria-label="Alternar tema">🌓</button>
-  </header>
+  </section>
 
-  <main>
-    <section class="cards">
-      <div class="card"><span>Receitas</span><strong id="sumIncome" class="pos">R$ 0,00</strong></div>
-      <div class="card"><span>Despesas</span><strong id="sumExpense" class="neg">R$ 0,00</strong></div>
-      <div class="card"><span>Saldo do mês</span><strong id="sumBalance">R$ 0,00</strong></div>
-      <div class="card"><span>Saldo acumulado</span><strong id="sumTotal">R$ 0,00</strong></div>
-    </section>
-
-    <section class="grid">
-      <div class="panel">
-        <h2 id="formTitle">Nova transação</h2>
-        <form id="txForm">
-          <input type="hidden" id="txId" />
-          <div class="type-toggle">
-            <label><input type="radio" name="type" value="expense" checked /> Despesa</label>
-            <label><input type="radio" name="type" value="income" /> Receita</label>
-          </div>
-          <label>Descrição<input id="txDesc" required maxlength="80" placeholder="Ex.: Mercado" /></label>
-          <div class="row">
-            <label>Valor (R$)<input id="txAmount" required inputmode="decimal" placeholder="0,00" /></label>
-            <label>Data<input id="txDate" type="date" required /></label>
-          </div>
-          <label>Categoria<select id="txCategory"></select></label>
-          <div class="row">
-            <button type="submit" class="primary" id="submitBtn">Adicionar</button>
-            <button type="button" class="ghost hidden" id="cancelEdit">Cancelar</button>
-          </div>
-        </form>
+  <!-- App -->
+  <div id="app" class="app" hidden>
+    <header class="topo">
+      <div class="topo-txt">
+        <h1>Finanças</h1>
+        <p class="atualizado" id="atualizado"></p>
       </div>
+      <select id="mes" class="sel-mes" aria-label="Mês"></select>
+      <button class="btn-icone" id="btnAtualizar" aria-label="Atualizar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16m0 4v-4h-4"/></svg>
+      </button>
+    </header>
 
-      <div class="panel">
-        <h2>Despesas por categoria</h2>
-        <div id="chart" class="chart"></div>
-      </div>
+    <main id="tela" class="tela" tabindex="-1"></main>
 
-      <div class="panel">
-        <h2>Orçamentos do mês</h2>
-        <div id="budgets"></div>
-        <form id="budgetForm" class="row">
-          <select id="budgetCategory"></select>
-          <input id="budgetAmount" inputmode="decimal" placeholder="Limite R$" required />
-          <button class="primary" type="submit">Definir</button>
-        </form>
-      </div>
-    </section>
+    <button class="fab" id="fab" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      <span>Gasto</span>
+    </button>
 
-    <section class="panel">
-      <div class="list-head">
-        <h2>Transações</h2>
-        <div class="filters">
-          <input id="search" type="search" placeholder="Buscar..." />
-          <select id="filterType">
-            <option value="all">Todas</option>
-            <option value="income">Receitas</option>
-            <option value="expense">Despesas</option>
-          </select>
-        </div>
-      </div>
-      <ul id="txList" class="tx-list"></ul>
-      <p id="emptyMsg" class="empty">Nenhuma transação neste mês.</p>
-    </section>
+    <nav class="abas" id="abas">
+      <button data-tela="mes" class="ativa">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M8.5 14l2.2 2.2 4.8-4.7"/></svg>
+        <span>Mês</span>
+      </button>
+      <button data-tela="graficos">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        <span>Gráficos</span>
+      </button>
+      <button data-tela="mais">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>
+        <span>Mais</span>
+      </button>
+    </nav>
+  </div>
 
-    <section class="panel tools">
-      <button id="exportCsv" class="ghost">Exportar CSV</button>
-      <button id="exportJson" class="ghost">Backup (JSON)</button>
-      <label class="ghost file-btn">Restaurar backup<input id="importJson" type="file" accept="application/json" hidden /></label>
-    </section>
-  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="folha" class="folha"></dialog>
+  <div id="dica" class="dica-grafico" role="tooltip" hidden></div>
 
   <script src="app.js"></script>
 </body>
