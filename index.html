@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Finanças</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>💰 Finanças</h1>
+    <div class="month-nav">
+      <button id="prevMonth" aria-label="Mês anterior">‹</button>
+      <span id="monthLabel"></span>
+      <button id="nextMonth" aria-label="Próximo mês">›</button>
+    </div>
+    <button id="themeToggle" class="ghost" aria-label="Alternar tema">🌓</button>
+  </header>
+
+  <main>
+    <section class="cards">
+      <div class="card"><span>Receitas</span><strong id="sumIncome" class="pos">R$ 0,00</strong></div>
+      <div class="card"><span>Despesas</span><strong id="sumExpense" class="neg">R$ 0,00</strong></div>
+      <div class="card"><span>Saldo do mês</span><strong id="sumBalance">R$ 0,00</strong></div>
+      <div class="card"><span>Saldo acumulado</span><strong id="sumTotal">R$ 0,00</strong></div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2 id="formTitle">Nova transação</h2>
+        <form id="txForm">
+          <input type="hidden" id="txId" />
+          <div class="type-toggle">
+            <label><input type="radio" name="type" value="expense" checked /> Despesa</label>
+            <label><input type="radio" name="type" value="income" /> Receita</label>
+          </div>
+          <label>Descrição<input id="txDesc" required maxlength="80" placeholder="Ex.: Mercado" /></label>
+          <div class="row">
+            <label>Valor (R$)<input id="txAmount" required inputmode="decimal" placeholder="0,00" /></label>
+            <label>Data<input id="txDate" type="date" required /></label>
+          </div>
+          <label>Categoria<select id="txCategory"></select></label>
+          <div class="row">
+            <button type="submit" class="primary" id="submitBtn">Adicionar</button>
+            <button type="button" class="ghost hidden" id="cancelEdit">Cancelar</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>Despesas por categoria</h2>
+        <div id="chart" class="chart"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Orçamentos do mês</h2>
+        <div id="budgets"></div>
+        <form id="budgetForm" class="row">
+          <select id="budgetCategory"></select>
+          <input id="budgetAmount" inputmode="decimal" placeholder="Limite R$" required />
+          <button class="primary" type="submit">Definir</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="list-head">
+        <h2>Transações</h2>
+        <div class="filters">
+          <input id="search" type="search" placeholder="Buscar..." />
+          <select id="filterType">
+            <option value="all">Todas</option>
+            <option value="income">Receitas</option>
+            <option value="expense">Despesas</option>
+          </select>
+        </div>
+      </div>
+      <ul id="txList" class="tx-list"></ul>
+      <p id="emptyMsg" class="empty">Nenhuma transação neste mês.</p>
+    </section>
+
+    <section class="panel tools">
+      <button id="exportCsv" class="ghost">Exportar CSV</button>
+      <button id="exportJson" class="ghost">Backup (JSON)</button>
+      <label class="ghost file-btn">Restaurar backup<input id="importJson" type="file" accept="application/json" hidden /></label>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
