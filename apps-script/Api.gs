@@ -3,7 +3,8 @@
  *
  * O app (GitHub Pages) conversa com este script por POST, em JSON:
  *   { token, acao, ...dados }
- * Ações: ping, mes, graficos, pagar, gasto, previaMes, criarMes.
+ * Ações: ping, mes, graficos, pagar, gasto, previaMes, criarMes,
+ *        faturas, importarFatura, atualizarLinhaFatura (essas três em Faturas.gs).
  *
  * As contas NÃO são refeitas aqui: os números vêm das mesmas funções do
  * RELATORIO (Dados.gs): obterResumoMes, obterPendencias, obterFluxo...
@@ -17,13 +18,13 @@
  * Usa de outros arquivos: Config.gs (PLANILHA, PREFIXO_FATURA, ABA_ENTRADAS),
  * Dados.gs (listarMeses, obterUltimoMes, somarMeses, mesParaNumero,
  * obterResumoMes, obterPendencias, obterFluxo), Relatorio.gs (atualizarRelatorio),
- * Importar.gs (importarEntradas, ID_FREELANCER).
+ * Importar.gs (importarEntradas, ID_FREELANCER, ID_CARTAO), Faturas.gs.
  * Para conferir se está tudo lá: rode a função apiTestar() no editor.
  *
  * Não tem onOpen. Só pode existir UM doGet/doPost no projeto.
  **********************************************************************/
 
-const VERSAO_SCRIPT = 1;
+const VERSAO_SCRIPT = 2;
 
 const API_CFG = {
   PESSOAS: ['Manu', 'José'],
@@ -94,6 +95,25 @@ function apiRotear_(u, req) {
     case 'criarMes':
       apiExigirLancar_(u);
       return apiComGravacao_(req.idEnvio, null, () => apiCriarMes_(req, u.nome));
+
+    case 'faturas':
+      return { faturaTela: apiFaturas_(req.pessoa, req.fatura) };
+
+    case 'importarFatura':
+      apiExigirLancar_(u);
+      return apiComGravacao_(req.idEnvio, req.mesTela, () => {
+        const r = apiImportarFatura_(req, u.nome);
+        r.faturaTela = apiFaturas_(r.pessoa, r.fatura);
+        return r;
+      });
+
+    case 'atualizarLinhaFatura':
+      apiExigirLancar_(u);
+      return apiComGravacao_(req.idEnvio, req.mesTela, () => {
+        const r = apiAtualizarLinhaFatura_(req, u.nome);
+        r.faturaTela = apiFaturas_(r.pessoa, r.fatura);
+        return r;
+      });
 
     default:
       throw new Error('Ação desconhecida. Atualize o app.');
@@ -460,10 +480,14 @@ function apiCriarMes_(req, autor) {
   apiLog_(autor, 'Criou mês', plano.novo + ' · ' + plano.copiar.length + ' contas fixas' +
     (plano.encerradas.length ? ' · encerrou ' + plano.encerradas.join(', ') : ''));
 
+  // faturas do cartão que vencem nesse mês e já estão importadas: valor certo na linha FATURA
+  const faturas = typeof fatPreencherMesNovo_ === 'function' ? fatPreencherMesNovo_(plano.novo, autor) : [];
+
   return {
     gravado: true,
     mesTela: plano.novo,
-    msg: plano.novo + ' criado com ' + plano.copiar.length + ' contas fixas. Confira os valores que mudam todo mês (luz, água).'
+    msg: plano.novo + ' criado com ' + plano.copiar.length + ' contas fixas.' +
+      (faturas.length ? ' ' + faturas.join(' ') : '') + ' Confira os valores que mudam todo mês (luz, água).'
   };
 }
 
@@ -744,7 +768,9 @@ function apiTestar() {
     'obterFluxo (Dados.gs)': typeof obterFluxo === 'function',
     'atualizarRelatorio (Relatorio.gs)': typeof atualizarRelatorio === 'function',
     'importarEntradas (Importar.gs)': typeof importarEntradas === 'function',
-    'ID_FREELANCER (Importar.gs)': typeof ID_FREELANCER !== 'undefined'
+    'ID_FREELANCER (Importar.gs)': typeof ID_FREELANCER !== 'undefined',
+    'ID_CARTAO (Importar.gs)': typeof ID_CARTAO !== 'undefined',
+    'Faturas.gs': typeof apiFaturas_ === 'function'
   };
   const faltando = Object.keys(precisa).filter(k => !precisa[k]);
   console.log(faltando.length ? '❌ FALTANDO: ' + faltando.join(', ') : '✅ Todas as funções que o app usa existem.');
@@ -757,5 +783,10 @@ function apiTestar() {
   console.log('Gráficos: ' + g.historico.length + ' meses no histórico, ' + g.fluxo.length + ' no fluxo.');
   const p = apiPreviaMes_();
   console.log('Próximo mês: ' + p.novo + (p.jaExiste ? ' (já existe)' : '') + ' · ' + p.copiar.length + ' contas fixas seriam copiadas.');
+  if (typeof apiFaturas_ === 'function') {
+    const f = apiFaturas_('Manu', '');
+    console.log('Fatura Manu ' + f.fatura + ': total ' + apiMoeda_(f.totais.total) + ' · meu gasto ' + apiMoeda_(f.totais.meuGasto) +
+      (f.totais.teto != null ? ' · teto ' + apiMoeda_(f.totais.teto) : '') + ' · ' + f.compras.length + ' compras, ' + f.parcelas.length + ' parcelas');
+  }
   console.log('Chaves cadastradas: ' + Object.keys(apiUsuarios_()).length);
 }

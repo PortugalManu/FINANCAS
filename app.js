@@ -1,8 +1,8 @@
 /* Finanças — app do celular (PWA) da planilha GASTOS JOSÉ/MANU.
  * Só desenha as telas. Toda regra de negócio fica no Apps Script da planilha (apps-script/Api.gs). */
 'use strict';
-const APP_VERSAO = 1;
-const SCRIPT_MINIMO = 1;   // versão do Api.gs que este app espera
+const APP_VERSAO = 2;
+const SCRIPT_MINIMO = 2;   // versão do Api.gs que este app espera
 
 /* ---------------- guardado no aparelho ---------------- */
 const K = { api: 'fin.api', chave: 'fin.chave', usuario: 'fin.usuario', dados: 'fin.dados' };
@@ -19,6 +19,8 @@ const st = {
   dados: guardado.ler(K.dados),
   versaoScript: null,
   graficos: null,
+  fatPessoa: 'Manu',
+  faturaTela: null,
   tela: 'mes',
   ocupado: false,
   instalar: null
@@ -170,6 +172,7 @@ async function recarregar(mes) {
   try {
     await chamar('mes', { mes: mes || (st.dados && st.dados.mes) || '', sincronizar: true });
     if (st.tela === 'graficos') await carregarGraficos();
+    if (st.tela === 'faturas' && st.faturaTela) await carregarFaturas(st.fatPessoa, st.faturaTela.fatura);
   } catch (e) { toast(e.message, true); }
   finally { ocupado(false); render(); }
 }
@@ -216,6 +219,11 @@ async function irPara(tela) {
   st.tela = tela;
   render();
   window.scrollTo(0, 0);
+  if (tela === 'faturas' && !st.faturaTela && st.dados) {
+    ocupado(true);
+    try { await carregarFaturas(st.fatPessoa, ''); } catch (e) { toast(e.message, true); }
+    finally { ocupado(false); render(); }
+  }
   if (tela === 'graficos' && !st.graficos && st.dados) {
     ocupado(true);
     try { await carregarGraficos(); } catch (e) { toast(e.message, true); }
@@ -234,12 +242,13 @@ function render() {
     sel.innerHTML = d.meses.map(m => `<option value="${m}"${m === d.mes ? ' selected' : ''}>${m}</option>`).join('');
     $('#atualizado').textContent = 'Atualizado ' + d.atualizadoEm + (podeLancar() ? '' : ' · só leitura');
   }
-  sel.hidden = !d || st.tela === 'mais';
+  sel.hidden = !d || st.tela === 'mais' || st.tela === 'faturas';
   $('#fab').hidden = !(d && podeLancar() && st.tela === 'mes');
   const tela = $('#tela');
   if (!d) { tela.innerHTML = '<div class="esqueleto"></div><div class="esqueleto"></div>'; return; }
   if (st.tela === 'mes') tela.innerHTML = telaMes(d);
   else if (st.tela === 'graficos') tela.innerHTML = telaGraficos();
+  else if (st.tela === 'faturas') tela.innerHTML = telaFaturas();
   else tela.innerHTML = telaMais();
   ligarTela(tela);
 }
@@ -335,9 +344,12 @@ function ligarTela(tela) {
     else if (b.dataset.desfazer) desfazer(Number(b.dataset.desfazer));
     else if (b.dataset.acao === 'criarMes') abrirCriarMes();
     else if (b.dataset.acao === 'instalar') instalar();
+    else if (b.dataset.acao === 'importarCsv') escolherCsv();
+    else if (b.dataset.acao === 'linhaFatura') atualizarLinhaFatura();
     else if (b.dataset.acao === 'sair') sairDoAparelho();
   };
   if (st.tela === 'graficos') ligarGraficos(tela);
+  if (st.tela === 'faturas') ligarFaturas(tela);
 }
 
 const achar = linha => st.dados.contas.find(x => x.linha === linha);
@@ -648,6 +660,213 @@ function ligarGraficos(tela) {
 }
 document.addEventListener('click', e => { if (!e.target.closest('.alvo')) $('#dica').hidden = true; });
 window.addEventListener('scroll', () => { $('#dica').hidden = true; }, { passive: true });
+
+/* ---------------- faturas ---------------- */
+const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const rotuloFatura = m => { const p = String(m).split('/'); return MESES_ABREV[Number(p[0]) - 1] + './' + p[1]; };
+const somarMes = (m, n) => { const t = mesNum(m) - 1 + n; return String(t % 12 + 1).padStart(2, '0') + '/' + Math.floor(t / 12); };
+
+async function carregarFaturas(pessoa, fatura) {
+  const j = await chamar('faturas', { pessoa: pessoa || st.fatPessoa, fatura: fatura || '' });
+  st.faturaTela = j.faturaTela;
+  st.fatPessoa = j.faturaTela.pessoa;
+}
+async function trocarFatura(pessoa, fatura) {
+  if (st.ocupado) return;
+  ocupado(true);
+  try { await carregarFaturas(pessoa, fatura); } catch (e) { toast(e.message, true); }
+  finally { ocupado(false); render(); }
+}
+
+function telaFaturas() {
+  const f = st.faturaTela;
+  let h = `<div class="seg seg-pessoa" id="fatPessoa">${['Manu', 'José'].map(p =>
+    `<button type="button" class="chip${st.fatPessoa === p ? ' on' : ''}" data-pessoa="${p}">${p}</button>`).join('')}</div>`;
+  if (!f || f.pessoa !== st.fatPessoa) return h + '<div class="esqueleto"></div><div class="esqueleto"></div>';
+
+  const t = f.totais;
+  const opcoes = f.faturas.indexOf(f.fatura) === -1 ? [f.fatura].concat(f.faturas) : f.faturas;
+  h += `<div class="linha-fatura"><label class="rot-campo" for="selFatura" style="margin:0">Fatura (vencimento)</label>
+    <select id="selFatura" class="sel-mes">${opcoes.map(x => `<option value="${x}"${x === f.fatura ? ' selected' : ''}>${rotuloFatura(x)}${x === f.atual ? ' · atual' : ''}</option>`).join('')}</select></div>`;
+
+  const vazia = !f.compras.length && !f.parcelas.length;
+  if (vazia) {
+    h += `<p class="aviso info">${ICO.info}<span>${f.pessoa === 'José' && !f.faturas.length
+      ? 'Nenhuma fatura do José importada ainda. Toque em <b>Importar fatura</b> e escolha o CSV do Nubank dele.'
+      : 'Nada lançado nesta fatura ainda.'}</span></p>`;
+  } else {
+    h += `<section class="hero">
+      <p class="rot">Fatura ${esc(rotuloFatura(f.fatura))} · ${esc(f.pessoa)}</p>
+      <p class="val num">${brl(t.total)}</p>
+      <dl class="conta num">
+        ${f.pessoa === 'Manu' ? `<dt>Compras</dt><dd>${brl(t.compras)}</dd><dt>Parcelas</dt><dd>${brl(t.parcelas)}</dd>` : ''}
+        ${t.pai ? `<dt>− Empresa do pai</dt><dd>${brl(t.pai)}</dd>` : ''}
+        <dt class="igual">= ${f.pessoa === 'Manu' ? 'Meu gasto' : 'Total'}</dt><dd class="igual">${brl(t.meuGasto)}</dd>
+      </dl>
+    </section>`;
+    if (f.pessoa === 'Manu') {
+      h += `<div class="kpis">
+        <div class="kpi"><p class="rot">Teto</p><p class="val num">${t.teto == null ? '—' : brl(t.teto)}</p>
+          <p class="det">${t.disponivel == null ? '' : t.disponivel < 0 ? '<span class="neg">passou ' + brl(-t.disponivel) + '</span>' : 'sobra ' + brl(t.disponivel)}</p></div>
+        <div class="kpi"><p class="rot">Falta pagar</p><p class="val num">${brl(t.falta)}</p>
+          <p class="det">${t.jaPago ? 'já pago antes ' + brl(t.jaPago) : 'nada pago antes'}</p></div>
+      </div>`;
+    } else if (f.importadoEm) {
+      h += `<p class="muted" style="font-size:13px;margin:0 4px 10px">Importada em ${esc(f.importadoEm)}</p>`;
+    }
+  }
+
+  // linha FATURA na planilha GASTOS
+  const g = f.gastos;
+  if (g) {
+    let txt, botao = '';
+    if (!g.existeMes) txt = `A aba <b>${esc(g.mes)}</b> ainda não existe. O valor entra sozinho quando você criar o mês.`;
+    else if (!g.existeLinha) {
+      txt = `A aba ${esc(g.mes)} não tem a linha <b>${esc(g.nome)}</b>.`;
+      if (podeLancar() && !vazia) botao = `<button class="btn primario" data-acao="linhaFatura">Criar com ${brl(g.valorFatura)}</button>`;
+    } else {
+      txt = `Na planilha GASTOS, <b>${esc(g.nome)}</b> de ${esc(g.mes)} está com <b class="num">${brl(g.valor)}</b> (${g.pago ? 'paga' : 'não paga'}).`;
+      if (g.difere && !vazia) {
+        if (g.pago) txt += ` A fatura dá ${brl(g.valorFatura)}, mas a linha já está paga e não é mudada pelo app.`;
+        else if (podeLancar()) botao = `<button class="btn primario" data-acao="linhaFatura">Atualizar para ${brl(g.valorFatura)}</button>`;
+      }
+    }
+    h += `<div class="aviso ${g.existeMes && g.existeLinha && !g.difere ? 'ok' : 'atencao'} col">${ICO.info}<div><span>${txt}</span>${botao ? '<div>' + botao + '</div>' : ''}</div></div>`;
+  }
+
+  if (podeLancar()) {
+    h += `<button class="btn secundario cheio" data-acao="importarCsv" style="margin-bottom:6px">${ICO.baixar.replace('M12 4v11M7 10l5 5 5-5', 'M12 15V4M7 9l5-5 5 5')}Importar fatura (CSV)</button>
+      <p class="muted" style="font-size:12px;margin:0 4px 6px">${f.pessoa === 'Manu'
+        ? 'Pode importar o mesmo arquivo de novo: o que já está na planilha é ignorado.'
+        : 'Importar de novo a mesma fatura troca os lançamentos dela pelos do arquivo.'}</p>`;
+  }
+
+  if (!vazia) {
+    const maxC = Math.max(1, ...f.categorias.map(c => c.total));
+    h += `<h2 class="sec-titulo"><span>Por categoria</span></h2><section class="grafico"><div class="barras-pessoa">${f.categorias.map(c => `<div class="bp-linha">
+      <div class="bp-meta"><span>${esc(c.categoria)}</span><span class="num">${brl(c.total)}</span></div>
+      <div class="bp-trilho"><div style="width:${Math.max(0, c.total / maxC * 100).toFixed(1)}%;background:var(--s1)"></div></div></div>`).join('')}</div></section>`;
+    h += dobra('Compras (' + f.compras.length + ')', brl(t.compras), f.compras.length ? f.compras.map(x => `<div class="item"><div class="info">
+      <div class="nome">${esc(x.descricao)}</div><div class="meta">${esc(x.data)} · ${esc(x.categoria)}${x.pai ? ' · empresa do pai' : ''}</div></div>
+      <div class="v num${x.valor < 0 ? ' pos' : ''}">${brl(x.valor)}</div></div>`).join('') : '<div class="vazio">Nenhuma compra.</div>');
+    if (f.pessoa === 'Manu') {
+      h += dobra('Parcelas (' + f.parcelas.length + ')', brl(t.parcelas), f.parcelas.length ? f.parcelas.map(x => `<div class="item"><div class="info">
+        <div class="nome">${esc(x.descricao)}</div><div class="meta">parcela ${esc(x.parcela)} · ${esc(x.categoria)}${x.pai ? ' · empresa do pai' : ''}</div></div>
+        <div class="v num">${brl(x.valor)}</div></div>`).join('') : '<div class="vazio">Nenhuma parcela.</div>');
+    }
+  }
+  return h;
+}
+
+function ligarFaturas(tela) {
+  const sel = $('#selFatura', tela);
+  if (sel) sel.onchange = () => trocarFatura(st.fatPessoa, sel.value);
+  const seg = $('#fatPessoa', tela);
+  seg.onclick = e => {
+    const b = e.target.closest('[data-pessoa]');
+    if (!b || b.dataset.pessoa === st.fatPessoa) return;
+    st.fatPessoa = b.dataset.pessoa;
+    render();
+    trocarFatura(st.fatPessoa, '');
+  };
+}
+
+async function atualizarLinhaFatura() {
+  const f = st.faturaTela;
+  const r = await gravar('atualizarLinhaFatura', { idEnvio: novoId(), pessoa: f.pessoa, fatura: f.fatura, valor: f.totais.meuGasto, mesTela: st.dados.mes });
+  if (!r) return;
+  if (r.faturaTela) st.faturaTela = r.faturaTela;
+  depoisDeGravar(r);
+}
+
+/* lê o CSV no celular só para mostrar a prévia; quem decide o que grava é o script */
+function previaCsv(texto) {
+  const linhas = texto.replace(/^﻿/, '').replace(/\r/g, '').split('\n').slice(1);
+  let qtd = 0, total = 0, pagamentos = 0, parcelas = 0;
+  linhas.forEach(l => {
+    const m = l.trim().match(/^(\d{4}-\d{2}-\d{2}),(.*),"([^"]*)"$/) || l.trim().match(/^(\d{4}-\d{2}-\d{2}),(.*),([^,]*)$/);
+    if (!m) return;
+    const v = Number(m[3].replace(/\s/g, '').replace(/\./g, '').replace(',', '.'));
+    if (!isFinite(v)) return;
+    if (/^"?pagamento recebido/i.test(m[2])) { pagamentos++; return; }
+    if (/-\s*Parcela\s+\d+\/\d+/i.test(m[2])) parcelas++;
+    qtd++; total += v;
+  });
+  return { qtd, total: Math.round(total * 100) / 100, pagamentos, parcelas };
+}
+
+function escolherCsv() {
+  const inp = $('#arquivoCsv');
+  inp.value = '';
+  inp.onchange = async () => {
+    const arq = inp.files && inp.files[0];
+    if (!arq) return;
+    if (arq.size > 2 * 1024 * 1024) { toast('Arquivo grande demais para uma fatura.', true); return; }
+    const texto = await arq.text();
+    const pv = previaCsv(texto);
+    if (!pv.qtd && !pv.pagamentos) { toast('Não encontrei lançamentos no arquivo. Confira se é o CSV da fatura do Nubank.', true); return; }
+    abrirImportar(arq.name, texto, pv);
+  };
+  inp.click();
+}
+
+function abrirImportar(nome, texto, pv) {
+  const f = st.faturaTela, pessoa = f.pessoa;
+  const m = nome.match(/(\d{4})-(\d{2})-(\d{2})/);
+  const doNome = m ? m[2] + '/' + m[1] : '';
+  const base = doNome || f.fatura;
+  const opcoes = [-3, -2, -1, 0, 1, 2].map(n => somarMes(base, n));
+  const id = novoId();
+  abrirFolha(`<h2>Importar fatura de ${esc(pessoa)}</h2>
+    <p class="ctx">${esc(nome)}</p>
+    <ul class="lista-previa">
+      <li><span>Lançamentos no arquivo</span><span class="num">${pv.qtd}</span></li>
+      ${pv.parcelas ? `<li><span>…sendo parcelas</span><span class="num">${pv.parcelas}</span></li>` : ''}
+      <li><span>Soma das compras</span><span class="num">${brl(pv.total)}</span></li>
+      ${pv.pagamentos ? `<li><span>Pagamentos recebidos</span><span class="num">${pv.pagamentos}</span></li>` : ''}
+    </ul>
+    <span class="rot-campo">De qual fatura é (vencimento)?</span>
+    <select class="campo" id="iFatura">${opcoes.map(x => `<option value="${x}"${x === base ? ' selected' : ''}>${rotuloFatura(x)}${x === doNome ? ' (pelo nome do arquivo)' : ''}</option>`).join('')}</select>
+    <p class="aviso info" style="margin-top:12px">${ICO.info}<span>${pessoa === 'Manu'
+      ? 'Entra na planilha do cartão com a mesma regra do menu Nubank: o que já está lá é ignorado, parcelado só entra a parcela 1 e o que é da empresa do pai é marcado sozinho.'
+      : 'Os lançamentos vão para a aba "Lançamentos José" da planilha do cartão. Se essa fatura já tinha sido importada, as linhas dela são trocadas pelas do arquivo.'}
+      Depois, a linha ${esc(pessoa === 'Manu' ? 'FATURA MANU' : 'FATURA JOSÉ')} do mês é atualizada na GASTOS (se ainda não estiver paga).</span></p>
+    <div class="folha-acoes"><button class="btn secundario" data-fechar>Cancelar</button><button class="btn primario" id="iOk">Importar</button></div>`,
+  (c, fechar) => {
+    $('#iOk', c).onclick = async e => {
+      const fatura = $('#iFatura', c).value;
+      const r = await gravar('importarFatura', { idEnvio: id, pessoa, fatura, csv: texto, arquivo: nome, mesTela: st.dados.mes }, e.currentTarget);
+      if (!r) return;
+      fechar();
+      if (r.faturaTela) st.faturaTela = r.faturaTela;
+      else await carregarFaturas(pessoa, fatura).catch(() => {});
+      render();
+      mostrarResultado(r);
+    };
+  });
+}
+
+function mostrarResultado(r) {
+  if (r.repetido) { toast('Já estava importado.'); return; }
+  const lis = arr => '<ul class="lista-previa">' + arr.map(x => `<li><span>${esc(x)}</span></li>`).join('') + '</ul>';
+  let h = `<h2>Fatura importada</h2><p class="ctx">${esc(r.msg)}</p><ul class="lista-previa">`;
+  if (r.pessoa === 'José') {
+    h += `<li><span>Lançamentos gravados</span><span class="num">${r.compras}</span></li>`;
+    if (r.substituidas) h += `<li><span>Linhas antigas trocadas</span><span class="num">${r.substituidas}</span></li>`;
+  } else {
+    h += `<li><span>Compras novas</span><span class="num">${r.compras}</span></li>
+      <li><span>Parcelamentos novos</span><span class="num">${r.parcelados}</span></li>
+      <li><span>Pagamentos adiantados</span><span class="num">${r.pagamentos}</span></li>
+      <li><span>Já estavam na planilha</span><span class="num">${r.repetidos}</span></li>`;
+  }
+  h += '</ul>';
+  if (r.linha) h += `<p class="aviso ${r.linha.mudou ? 'ok' : 'info'}" style="margin-top:12px">${ICO.info}<span>${esc(r.linha.msg)}</span></p>`;
+  if (r.doPai && r.doPai.length) h += `<span class="rot-campo">Marcados como empresa do pai</span>${lis(r.doPai)}`;
+  if (r.outros && r.outros.length) h += `<span class="rot-campo">Ficaram em "Outros" (confira a categoria)</span>${lis(r.outros)}`;
+  h += `<div class="folha-acoes"><button class="btn primario" data-fechar>Pronto</button></div>`;
+  abrirFolha(h);
+  vibrar(30);
+}
 
 /* ---------------- tela: mais ---------------- */
 function telaMais() {
