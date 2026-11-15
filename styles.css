@@ -247,3 +247,9 @@ details.dobra > summary .sec-titulo span:first-child { flex: 1; }
 .carregando .tela { opacity: .55; pointer-events: none; transition: opacity .2s; }
 .esqueleto { height: 120px; border-radius: var(--radius); background: var(--surface-2); margin-bottom: 12px; animation: pisca 1.2s ease-in-out infinite; }
 @keyframes pisca { 50% { opacity: .5; } }
+
+/* ===== Faturas ===== */
+.seg-pessoa { margin-bottom: 12px; }
+.linha-fatura { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 2px 12px; }
+.aviso.col > div { display: grid; gap: 8px; flex: 1; }
+.aviso.col .btn { width: 100%; }

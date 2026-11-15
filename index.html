@@ -63,6 +63,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M8.5 14l2.2 2.2 4.8-4.7"/></svg>
         <span>Mês</span>
       </button>
+      <button data-tela="faturas">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3zM3 10h18M7 15h4"/></svg>
+        <span>Faturas</span>
+      </button>
       <button data-tela="graficos">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
         <span>Gráficos</span>
@@ -77,6 +81,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <dialog id="folha" class="folha"></dialog>
   <div id="dica" class="dica-grafico" role="tooltip" hidden></div>
+  <input type="file" id="arquivoCsv" accept=".csv,text/csv,text/comma-separated-values,text/plain" hidden>
 
   <script src="app.js"></script>
 </body>
