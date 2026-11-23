@@ -13,6 +13,7 @@ apps-script/
 
 **O que o app faz:**
 - **Mês:** quanto entrou, o que já foi pago, o que falta pagar (por vencimento, em vermelho o que venceu), atrasadas de meses anteriores, o que passou no cartão e as entradas do mês.
+- **Abater atrasado:** nas contas atrasadas (meses anteriores), o botão **Abater** registra um pagamento parcial ou total, igual ao menu "Registrar pagamento de divida": grava na aba PAGAMENTOS e abate do mês mais antigo para o mais novo. Antes de gravar, mostra o que fica quitado. Não deixa passar do total atrasado, para não abater sem querer a conta do mês atual com o mesmo nome.
 - **Pagar:** marca a conta como paga e pergunta quem pagou. Antes de gravar, confere o nome e o valor da linha, porque existem 3 linhas "MRV".
 - **+ Gasto:** lança na aba do mês. "Como pagou?" é obrigatório. No cartão de crédito, o gasto não soma no total, porque entra pela FATURA. Conta de boleto no crédito pede confirmação, e um gasto igual (mesmo nome e valor) já lançado no mês avisa antes de gravar.
 - **Criar o mês novo:** mesma regra do menu (copia as fixas, marca tudo como não pago e avança as parcelas). Antes de criar, mostra a prévia do que vai ser copiado.
@@ -71,7 +72,7 @@ Para cortar o acesso de alguém: **📱 App do celular → Revogar acesso**.
 ---
 
 ## Testes
-A porta foi testada com uma cópia dos dados de 05, 06, 07, 10 e 11/2026 e da fatura dez./26, simulando o Google por baixo (48 testes do mês e 46 das faturas, com o CSV real `Nubank_2026-12-08.csv`). O app foi testado no tamanho de um celular contra esse simulador. Os testes não ficam neste repositório porque ele é público e eles contêm os valores.
+A porta foi testada com uma cópia dos dados de 05, 06, 07, 10 e 11/2026 e da fatura dez./26, simulando o Google por baixo (48 testes do mês, 15 do abatimento e 46 das faturas, com o CSV real `Nubank_2026-12-08.csv`). O app foi testado no tamanho de um celular contra esse simulador. Os testes não ficam neste repositório porque ele é público e eles contêm os valores.
 
 Com os dados de 11/2026, o app mostra: entrou R$ 6.661,15 − já pago R$ 6.780,98 − falta pagar R$ 2.043,27 (7 contas) = **fecha com −R$ 2.163,10**, e atrasado R$ 1.065,64 (UNIÃO 05 a 07/26).
 

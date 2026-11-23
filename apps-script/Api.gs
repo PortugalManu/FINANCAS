@@ -4,6 +4,7 @@
  * O app (GitHub Pages) conversa com este script por POST, em JSON:
  *   { token, acao, ...dados }
  * Ações: ping, mes, graficos, pagar, gasto, previaMes, criarMes,
+ *        abater (pagamento de conta atrasada, igual ao menu "Registrar pagamento de divida"),
  *        faturas, importarFatura, atualizarLinhaFatura (essas três em Faturas.gs).
  *
  * As contas NÃO são refeitas aqui: os números vêm das mesmas funções do
@@ -24,7 +25,7 @@
  * Não tem onOpen. Só pode existir UM doGet/doPost no projeto.
  **********************************************************************/
 
-const VERSAO_SCRIPT = 2;
+const VERSAO_SCRIPT = 3;
 
 const API_CFG = {
   PESSOAS: ['Manu', 'José'],
@@ -95,6 +96,10 @@ function apiRotear_(u, req) {
     case 'criarMes':
       apiExigirLancar_(u);
       return apiComGravacao_(req.idEnvio, null, () => apiCriarMes_(req, u.nome));
+
+    case 'abater':
+      apiExigirLancar_(u);
+      return apiComGravacao_(req.idEnvio, req.mesTela, () => apiAbater_(req, u.nome));
 
     case 'faturas':
       return { faturaTela: apiFaturas_(req.pessoa, req.fatura) };
@@ -250,20 +255,90 @@ function apiLerEntradas_(mes) {
     }));
 }
 
-/** UNIÃO de 05, 06 e 07 vira uma linha só. */
+/** UNIÃO de 05, 06 e 07 vira uma linha só (com o saldo de cada mês, do mais antigo ao mais novo). */
 function apiAgruparAtrasadas_(pendencias) {
   const mapa = {};
   pendencias.forEach(l => {
     const k = apiNorm_(apiBase_(l.despesa));
-    if (!mapa[k]) mapa[k] = { nome: apiBase_(l.despesa), saldo: 0, meses: [] };
+    if (!mapa[k]) mapa[k] = { nome: apiBase_(l.despesa), saldo: 0, itens: [] };
     mapa[k].saldo += l.saldo;
-    mapa[k].meses.push(l.mes);
+    mapa[k].itens.push({ mes: l.mes, saldo: apiR2_(l.saldo) });
   });
-  return Object.keys(mapa).map(k => ({
-    nome: mapa[k].nome,
-    saldo: apiR2_(mapa[k].saldo),
-    meses: mapa[k].meses.sort((a, b) => mesParaNumero(a) - mesParaNumero(b))
-  })).sort((a, b) => b.saldo - a.saldo);
+  return Object.keys(mapa).map(k => {
+    const itens = mapa[k].itens.sort((a, b) => mesParaNumero(a.mes) - mesParaNumero(b.mes));
+    return {
+      nome: mapa[k].nome,
+      saldo: apiR2_(mapa[k].saldo),
+      meses: itens.map(i => i.mes),
+      itens: itens,
+      maisAntigo: itens[0].mes
+    };
+  }).sort((a, b) => b.saldo - a.saldo);
+}
+
+/* ================= escrita: abater conta atrasada ================= */
+
+/**
+ * Igual ao menu "Registrar pagamento de divida" (Pagamentos.gs):
+ * grava uma linha na aba PAGAMENTOS (DATA | MES DE ORIGEM | DESPESA | VALOR PAGO | QUEM PAGOU)
+ * e o valor abate a dívida da mais antiga para a mais nova, dentro da mesma conta.
+ * Só aceita até o total atrasado: o que passasse disso abateria a conta do mês atual.
+ * req = { nome, saldo (o que o app mostrou), valor, quem }
+ */
+function apiAbater_(req, autor) {
+  const atual = obterUltimoMes();
+  const grupos = apiAgruparAtrasadas_(obterPendencias(atual).filter(l => l.mes !== atual));
+  const g = grupos.find(x => apiNorm_(x.nome) === apiNorm_(req.nome));
+  if (!g) throw new Error(String(req.nome || 'Essa conta') + ' não está mais atrasada. Atualize o app.');
+  if (Math.abs(g.saldo - Number(req.saldo)) > 0.004) {
+    throw new Error('O atrasado de ' + g.nome + ' mudou na planilha. Atualize o app e tente de novo.');
+  }
+
+  const valor = apiValor_(req.valor);
+  if (!(valor > 0)) throw new Error('Informe o valor pago.');
+  if (valor > g.saldo + 0.004) {
+    throw new Error('O valor passa do atrasado de ' + g.nome + ' (' + apiMoeda_(g.saldo) +
+      '). Para pagar a conta deste mês, use o botão Pagar dela.');
+  }
+  const quem = apiValidarQuem_(req.quem);
+  if (!quem) throw new Error('Diga quem pagou.');
+
+  const aba = typeof garantirAbaPagamentos === 'function' ? garantirAbaPagamentos() : apiAbaPagamentos_();
+  aba.appendRow([new Date(), g.maisAntigo, g.nome, valor, quem]);
+
+  // o que esse valor quita, do mais antigo para o mais novo
+  let resto = valor;
+  const quitados = [];
+  let parcial = null;
+  g.itens.forEach(i => {
+    if (resto <= 0.004) return;
+    const usa = Math.min(resto, i.saldo);
+    resto = apiR2_(resto - usa);
+    if (usa >= i.saldo - 0.004) quitados.push(i.mes);
+    else parcial = { mes: i.mes, falta: apiR2_(i.saldo - usa) };
+  });
+  const sobra = apiR2_(g.saldo - valor);
+
+  apiLog_(autor, 'Abateu atrasado', g.nome + ' · ' + apiMoeda_(valor) + ' · ' + quem +
+    (quitados.length ? ' · quitou ' + quitados.join(', ') : '') + ' · resta ' + apiMoeda_(sobra));
+
+  return {
+    gravado: true,
+    msg: g.nome + ': ' + apiMoeda_(valor) + ' abatido' +
+      (quitados.length ? ', quitou ' + quitados.join(', ') : '') +
+      (sobra > 0.004 ? '. Ainda faltam ' + apiMoeda_(sobra) + '.' : '. Atrasado zerado! 🎉')
+  };
+}
+
+/** Só se o Pagamentos.gs não existir: cria a aba PAGAMENTOS no mesmo formato do menu. */
+function apiAbaPagamentos_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let aba = ss.getSheetByName(ABA_PAGAMENTOS);
+  if (aba) return aba;
+  aba = ss.insertSheet(ABA_PAGAMENTOS);
+  aba.getRange(1, 1, 1, 5).setValues([['DATA', 'MES DE ORIGEM', 'DESPESA', 'VALOR PAGO', 'QUEM PAGOU']]).setFontWeight('bold');
+  aba.setFrozenRows(1);
+  return aba;
 }
 
 /* ================= leitura: gráficos ================= */
@@ -759,6 +834,8 @@ function apiTestar() {
     'PLANILHA (Config.gs)': typeof PLANILHA !== 'undefined',
     'PREFIXO_FATURA (Config.gs)': typeof PREFIXO_FATURA !== 'undefined',
     'ABA_ENTRADAS (Config.gs)': typeof ABA_ENTRADAS !== 'undefined',
+    'ABA_PAGAMENTOS (Config.gs)': typeof ABA_PAGAMENTOS !== 'undefined',
+    'garantirAbaPagamentos (Pagamentos.gs)': typeof garantirAbaPagamentos === 'function',
     'listarMeses (Dados.gs)': typeof listarMeses === 'function',
     'obterUltimoMes (Dados.gs)': typeof obterUltimoMes === 'function',
     'somarMeses (Dados.gs)': typeof somarMeses === 'function',

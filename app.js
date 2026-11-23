@@ -1,8 +1,8 @@
 /* Finanças — app do celular (PWA) da planilha GASTOS JOSÉ/MANU.
  * Só desenha as telas. Toda regra de negócio fica no Apps Script da planilha (apps-script/Api.gs). */
 'use strict';
-const APP_VERSAO = 2;
-const SCRIPT_MINIMO = 2;   // versão do Api.gs que este app espera
+const APP_VERSAO = 3;
+const SCRIPT_MINIMO = 3;   // versão do Api.gs que este app espera
 
 /* ---------------- guardado no aparelho ---------------- */
 const K = { api: 'fin.api', chave: 'fin.chave', usuario: 'fin.usuario', dados: 'fin.dados' };
@@ -310,8 +310,9 @@ function telaMes(d) {
   // atrasadas
   if (d.atrasadas.length) {
     h += `<h2 class="sec-titulo"><span>Atrasadas (meses antes)</span><span class="num">${brl(c.atrasado)}</span></h2><div class="lista">` +
-      d.atrasadas.map(a => `<div class="item"><div class="info"><div class="nome">${esc(a.nome)}</div>
-        <div class="meta">${esc(a.meses.join(', '))}</div></div><div class="v num">${brl(a.saldo)}</div></div>`).join('') + '</div>';
+      d.atrasadas.map((a, i) => `<div class="item"><div class="info"><div class="nome">${esc(a.nome)}</div>
+        <div class="meta">${esc(a.meses.join(', '))}</div></div><div class="v num">${brl(a.saldo)}</div>
+        ${podeLancar() && d.mes === d.ultimo ? `<button class="btn-pagar" data-abater="${i}">Abater</button>` : ''}</div>`).join('') + '</div>';
   }
 
   // dobráveis
@@ -338,9 +339,10 @@ function dobra(titulo, total, corpo) {
 
 function ligarTela(tela) {
   tela.onclick = e => {
-    const b = e.target.closest('[data-pagar],[data-desfazer],[data-acao]');
+    const b = e.target.closest('[data-pagar],[data-desfazer],[data-abater],[data-acao]');
     if (!b) return;
-    if (b.dataset.pagar) abrirPagar(Number(b.dataset.pagar));
+    if (b.dataset.abater) abrirAbater(Number(b.dataset.abater));
+    else if (b.dataset.pagar) abrirPagar(Number(b.dataset.pagar));
     else if (b.dataset.desfazer) desfazer(Number(b.dataset.desfazer));
     else if (b.dataset.acao === 'criarMes') abrirCriarMes();
     else if (b.dataset.acao === 'instalar') instalar();
@@ -415,6 +417,50 @@ async function desfazer(linha) {
   if (!ok) return;
   const r = await gravar('pagar', { idEnvio: novoId(), mes: st.dados.mes, linha: x.linha, despesa: x.despesa, valor: x.valor, pago: false });
   if (r) depoisDeGravar(r);
+}
+
+/* ---------------- abater conta atrasada ---------------- */
+/** O que o valor quita, do mês mais antigo para o mais novo (mesma regra da planilha). */
+function simularAbate(itens, valor) {
+  let resto = valor;
+  return itens.map(i => {
+    const usa = Math.max(0, Math.min(resto, i.saldo));
+    resto = Math.round((resto - usa) * 100) / 100;
+    return { mes: i.mes, saldo: i.saldo, usa, falta: Math.round((i.saldo - usa) * 100) / 100 };
+  });
+}
+function abrirAbater(i) {
+  const a = st.dados.atrasadas[i]; if (!a) return;
+  const pedido = { idEnvio: novoId(), mesTela: st.dados.mes, nome: a.nome, saldo: a.saldo, valor: '', quem: '' };
+  abrirFolha(`<h2>Abater ${esc(a.nome)}</h2>
+    <p class="ctx">Atrasado: <b class="num">${brl(a.saldo)}</b> (${esc(a.meses.join(', '))}). O valor abate do mês mais antigo para o mais novo, igual ao menu da planilha.</p>
+    <span class="rot-campo">Valor pago</span>
+    <input class="campo num" id="aValor" inputmode="decimal" autocomplete="off" value="${a.saldo.toFixed(2).replace('.', ',')}">
+    <ul class="lista-previa" id="aPrevia"></ul>
+    <p class="msg-erro" id="aErro" hidden style="font-size:14px;margin:8px 0 0"></p>
+    <span class="rot-campo">Quem pagou</span><div class="chips" id="aQuem"></div>
+    <div class="folha-acoes"><button class="btn secundario" data-fechar>Cancelar</button><button class="btn primario" id="aOk" disabled>Registrar</button></div>`,
+  (c, fechar) => {
+    const inp = $('#aValor', c), ok = $('#aOk', c), erro = $('#aErro', c);
+    function validar() {
+      const v = lerValor(inp.value);
+      const passa = v > a.saldo + 0.004;
+      erro.hidden = !passa;
+      if (passa) erro.textContent = 'Passa do atrasado (' + brl(a.saldo) + '). Para pagar a conta deste mês, use o botão Pagar dela.';
+      $('#aPrevia', c).innerHTML = v > 0 ? simularAbate(a.itens, Math.min(v, a.saldo)).map(x => `<li><span>${esc(x.mes)}</span><span class="num">${
+        x.usa <= 0 ? 'continua ' + brl(x.saldo) : x.falta <= 0.004 ? '<b class="pos">quitado</b>' : 'fica faltando ' + brl(x.falta)}</span></li>`).join('') : '';
+      ok.disabled = !(v > 0) || passa || !pedido.quem;
+      ok.textContent = v > 0 && !passa ? 'Registrar ' + brl(v) : 'Registrar';
+    }
+    chipsPessoas($('#aQuem', c), v => { pedido.quem = v; validar(); });
+    inp.oninput = validar;
+    ok.onclick = async e => {
+      pedido.valor = inp.value;
+      const r = await gravar('abater', pedido, e.currentTarget);
+      if (r) depoisDeGravar(r, fechar);
+    };
+    validar();
+  });
 }
 
 /* ---------------- + gasto ---------------- */
