@@ -737,9 +737,7 @@ function telaFaturas() {
 
   const vazia = !f.compras.length && !f.parcelas.length;
   if (vazia) {
-    h += `<p class="aviso info">${ICO.info}<span>${f.pessoa === 'José' && !f.faturas.length
-      ? 'Nenhuma fatura do José importada ainda. Toque em <b>Importar fatura</b> e escolha o CSV do Nubank dele.'
-      : 'Nada lançado nesta fatura ainda.'}</span></p>`;
+    if (f.pessoa !== 'José') h += `<p class="aviso info">${ICO.info}<span>Nada lançado nesta fatura ainda.</span></p>`;
   } else {
     h += `<section class="hero">
       <p class="rot">Fatura ${esc(rotuloFatura(f.fatura))} · ${esc(f.pessoa)}</p>
@@ -780,7 +778,9 @@ function telaFaturas() {
     h += `<div class="aviso ${g.existeMes && g.existeLinha && !g.difere ? 'ok' : 'atencao'} col">${ICO.info}<div><span>${txt}</span>${botao ? '<div>' + botao + '</div>' : ''}</div></div>`;
   }
 
-  if (podeLancar()) {
+  if (f.pessoa === 'José') {
+    h += `<p class="aviso info">${ICO.info}<span>A fatura do José vai ser ligada à planilha <b>CARTÃO NUBANK - CONTROLE JOSÉ</b>. Por enquanto a importação dele fica desligada.</span></p>`;
+  } else if (podeLancar()) {
     h += `<button class="btn secundario cheio" data-acao="importarCsv" style="margin-bottom:6px">${ICO.baixar.replace('M12 4v11M7 10l5 5 5-5', 'M12 15V4M7 9l5-5 5 5')}Importar fatura (CSV)</button>
       <p class="muted" style="font-size:12px;margin:0 4px 6px">${f.pessoa === 'Manu'
         ? 'Pode importar o mesmo arquivo de novo: o que já está na planilha é ignorado.'
